@@ -33,10 +33,10 @@
 // 「デプロイを管理」→「新バージョン」で反映させてください
 // （コードの保存だけでは、公開中のURLには反映されません）。
 //
-// 見積書の作成・自動転記はこのツール（HTML）から行い、
-// 受注日・失注日・出荷日・受注確度などの進捗更新は、このスプレッドシートの
-// 「見積明細」タブを直接編集して行います（日付・プルダウンは自動で
-// 設定されます）。
+// 見積書の作成・自動転記はこのツール（HTML）から行います。
+// 受注・失注の記録と受注確度の変更は、ツール（HTML）の「一覧」画面の
+// 「注文待ち（受注/失注チェック）」タブからワンクリックで行えます。
+// スプレッドシートを直接編集する必要はありません。
 // ============================================================
 
 const SHEET_CONFIG = '設定';
@@ -49,10 +49,9 @@ const SHEET_DELETE_LOG = '削除ログ';
 const SHEET_RESTORE_LOG = '復元ログ';
 
 const HEADER_COLS = ['書類番号', '発行日', '取引先名', '先方担当者名', '自社名', '部署名', '担当者名', '連絡先', '有効期限', '支払条件', '備考', 'フリー項目値', '進捗管理対象'];
-const DETAIL_COLS = ['書類番号', '行番号', '品番', '品名', '数量', '単価', '税率', '金額', '受注日', '納期', '失注日', '出荷日', '備考', '受注確度'];
+const DETAIL_COLS = ['書類番号', '行番号', '品番', '品名', '数量', '単価', '税率', '金額', '受注日', '納期', '失注日', '受注確度'];
 // バックアップ履歴：見積ヘッダー・見積明細の全項目を1明細1行でフラットに複製して記録する（差分表示機能用）。
-// 書類番号・備考は両シートに存在するため、備考のみヘッダー分／明細分を分けて名前を付ける。
-const BACKUP_COLS = ['バックアップID', 'バックアップ名', 'バックアップ日時', '書類番号', '発行日', '取引先名', '先方担当者名', '自社名', '部署名', '担当者名', '連絡先', '有効期限', '支払条件', '備考(ヘッダー)', 'フリー項目値', '進捗管理対象', '行番号', '品番', '品名', '数量', '単価', '税率', '金額', '受注日', '納期', '失注日', '出荷日', '備考(明細)', '受注確度'];
+const BACKUP_COLS = ['バックアップID', 'バックアップ名', 'バックアップ日時', '書類番号', '発行日', '取引先名', '先方担当者名', '自社名', '部署名', '担当者名', '連絡先', '有効期限', '支払条件', '備考(ヘッダー)', 'フリー項目値', '進捗管理対象', '行番号', '品番', '品名', '数量', '単価', '税率', '金額', '受注日', '納期', '失注日', '受注確度'];
 const BACKUP_LIST_COLS = ['バックアップID', 'バックアップ名', 'バックアップ日時', '件数'];
 const DELETE_LOG_COLS = ['書類番号', '削除日時'];
 const RESTORE_LOG_COLS = ['書類番号', '行番号', '復元日時', '元バックアップID'];
@@ -69,7 +68,7 @@ BACKUP_COLS.forEach(function (c, i) { BK[c] = i; });
 // DETAIL_COLS（実データ）には含めず、submitQuotation/getDashboardData等の読み書きの対象外とする。
 const DETAIL_HELPER_EXPIRY_COL = DETAIL_COLS.length + 1; // 有効期限（参照）
 const DETAIL_HELPER_TRACK_COL = DETAIL_COLS.length + 2; // 進捗管理対象（参照）
-const DETAIL_HELPER_KIND_COL = DETAIL_COLS.length + 3; // 要注意種別（有効期限超過／納期超過／空欄）
+const DETAIL_HELPER_KIND_COL = DETAIL_COLS.length + 3; // 要注意種別（有効期限超過／空欄）
 
 // [項目, 初期値, 説明]
 const CONFIG_DEFAULTS = [
@@ -112,6 +111,10 @@ function doPost(e) {
     if (action === 'importBackup') return jsonOut(importBackup(body));
     if (action === 'restoreDetailRows') return jsonOut(restoreDetailRows(body));
     if (action === 'deleteQuotation') return jsonOut(deleteQuotation(body));
+    if (action === 'markOrder') return jsonOut(markOrder(body));
+    if (action === 'markLost') return jsonOut(markLost(body));
+    if (action === 'setConfidence') return jsonOut(setConfidence(body));
+    if (action === 'undoMark') return jsonOut(undoMark(body));
     return jsonOut({ ok: false, error: 'unknown action: ' + action });
   } catch (err) {
     return jsonOut({ ok: false, error: String(err) });
@@ -346,8 +349,8 @@ function ensureRestoreLogSheet_(ss) {
   return sh;
 }
 
-// 要注意（有効期限超過・納期超過）の品目を、見積明細シート上でも
-// 条件付き書式でハイライトする（HTML側ダッシュボードの要注意一覧と同じ判定条件）。
+// 要注意（有効期限超過）の品目を、見積明細シート上でも
+// 条件付き書式でハイライトする（HTML側「注文待ち（受注/失注チェック）」タブと同じ判定条件）。
 // このシートの条件付き書式はこの関数だけが管理する前提で、毎回まるごと置き換える。
 function colLetter_(colNum1based) {
   let s = '', n = colNum1based;
@@ -360,7 +363,7 @@ function colLetter_(colNum1based) {
 }
 
 // 条件付き書式は別シートを直接参照できないため、writeDetailHelperFormulas_が計算した
-// 同一シート内の「要注意種別」列（有効期限超過／納期超過／空欄）だけを見て、種類ごとに色分けする
+// 同一シート内の「要注意種別」列（有効期限超過／空欄）だけを見て色分けする
 function applyDetailAlertFormat_(sh) {
   // 固定行数（2000行等）を指定すると、新規作成直後でまだ行数が少ないシートで
   // 「範囲がシートの最大行数を超えている」エラーになるため、実際の最大行数を使う
@@ -372,12 +375,7 @@ function applyDetailAlertFormat_(sh) {
     .setBackground('#fff3cd')
     .setRanges([range])
     .build();
-  const dueRule = SpreadsheetApp.newConditionalFormatRule()
-    .whenFormulaSatisfied('=' + kindCol + '="納期超過"')
-    .setBackground('#fce8e6')
-    .setRanges([range])
-    .build();
-  sh.setConditionalFormatRules([dueRule, expiryRule]);
+  sh.setConditionalFormatRules([expiryRule]);
 }
 
 // ---------------- 設定・登録リストの読み出し ----------------
@@ -572,8 +570,6 @@ function submitQuotation(body) {
       row[D['受注日']] = '';
       row[D['納期']] = parseDate_(it.dueDate);
       row[D['失注日']] = '';
-      row[D['出荷日']] = '';
-      row[D['備考']] = it.memo || '';
       row[D['受注確度']] = '';
       return row;
     });
@@ -603,7 +599,7 @@ function writeDetailHelperFormulas_(sh, startRow, numRows) {
     formulas.push([
       '=VLOOKUP($A' + r + ',\'' + SHEET_HEADER + '\'!$A:$I,9,FALSE)',
       '=VLOOKUP($A' + r + ',\'' + SHEET_HEADER + '\'!$A:$M,13,FALSE)',
-      '=IF(AND($I' + r + '="",$K' + r + '="",' + o + '<>"",' + o + '<TODAY(),' + p + '=TRUE),"有効期限超過",IF(AND($J' + r + '<>"",$J' + r + '<TODAY(),$I' + r + '<>"",$L' + r + '="",' + p + '=TRUE),"納期超過",""))'
+      '=IF(AND($I' + r + '="",$K' + r + '="",' + o + '<>"",' + o + '<TODAY(),' + p + '=TRUE),"有効期限超過","")'
     ]);
   }
   sh.getRange(startRow, DETAIL_HELPER_EXPIRY_COL, numRows, 3).setFormulas(formulas);
@@ -613,7 +609,6 @@ function writeDetailHelperFormulas_(sh, startRow, numRows) {
 function applyDetailValidation_(sh, startRow, numRows) {
   sh.getRange(startRow, D['受注日'] + 1, numRows, 1).setNumberFormat('yyyy-mm-dd');
   sh.getRange(startRow, D['納期'] + 1, numRows, 1).setNumberFormat('yyyy-mm-dd');
-  sh.getRange(startRow, D['出荷日'] + 1, numRows, 1).setNumberFormat('yyyy-mm-dd');
   sh.getRange(startRow, D['失注日'] + 1, numRows, 1).setNumberFormat('yyyy-mm-dd');
   const rule = SpreadsheetApp.newDataValidation().requireValueInList(['A', 'B', 'C'], true).setAllowInvalid(true).build();
   sh.getRange(startRow, D['受注確度'] + 1, numRows, 1).setDataValidation(rule);
@@ -644,6 +639,111 @@ function reapplyValidation() {
   }
   applyDetailAlertFormat_(dSh);
   SpreadsheetApp.getUi().alert('データ検証・書式を再設定しました。');
+}
+
+// ---------------- 注文待ち品目の記録（受注・失注・受注確度） ----------------
+
+// 書類番号＋行番号で見積明細シート上の該当行を探す
+function findDetailRow_(dSh, docNo, no) {
+  const last = dSh.getLastRow();
+  if (last < 2) return -1;
+  const vals = dSh.getRange(2, 1, last - 1, DETAIL_COLS.length).getValues();
+  for (let i = 0; i < vals.length; i++) {
+    if (String(vals[i][D['書類番号']]) === String(docNo) && Number(vals[i][D['行番号']]) === Number(no)) {
+      return i + 2;
+    }
+  }
+  return -1;
+}
+
+// body = { action:'markOrder', docNo, no }
+function markOrder(body) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dSh = ss.getSheetByName(SHEET_DETAIL);
+    const rowNum = findDetailRow_(dSh, body.docNo, body.no);
+    if (rowNum === -1) return { ok: false, error: '品目が見つかりません' };
+    const tz = Session.getScriptTimeZone() || 'Asia/Tokyo';
+    const orderCell = dSh.getRange(rowNum, D['受注日'] + 1);
+    const lostCell = dSh.getRange(rowNum, D['失注日'] + 1);
+    if (orderCell.getValue()) {
+      return { ok: true, already: true, date: fmtDate_(orderCell.getValue(), tz) };
+    }
+    if (lostCell.getValue()) {
+      return { ok: false, error: '既に失注として記録されています（先に失注の記録を取り消してください）' };
+    }
+    const now = new Date();
+    orderCell.setValue(now);
+    orderCell.setNumberFormat('yyyy-mm-dd');
+    return { ok: true, date: Utilities.formatDate(now, tz, 'yyyy-MM-dd') };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// body = { action:'markLost', docNo, no }
+function markLost(body) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dSh = ss.getSheetByName(SHEET_DETAIL);
+    const rowNum = findDetailRow_(dSh, body.docNo, body.no);
+    if (rowNum === -1) return { ok: false, error: '品目が見つかりません' };
+    const tz = Session.getScriptTimeZone() || 'Asia/Tokyo';
+    const orderCell = dSh.getRange(rowNum, D['受注日'] + 1);
+    const lostCell = dSh.getRange(rowNum, D['失注日'] + 1);
+    if (lostCell.getValue()) {
+      return { ok: true, already: true, date: fmtDate_(lostCell.getValue(), tz) };
+    }
+    if (orderCell.getValue()) {
+      return { ok: false, error: '既に受注として記録されています（先に受注の記録を取り消してください）' };
+    }
+    const now = new Date();
+    lostCell.setValue(now);
+    lostCell.setNumberFormat('yyyy-mm-dd');
+    return { ok: true, date: Utilities.formatDate(now, tz, 'yyyy-MM-dd') };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// body = { action:'setConfidence', docNo, no, confidence:'A'|'B'|'C'|'' }
+// 受注確度は単純な上書きのみ（取り消しトーストの対象外。選び直せば即反映される）
+function setConfidence(body) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dSh = ss.getSheetByName(SHEET_DETAIL);
+    const rowNum = findDetailRow_(dSh, body.docNo, body.no);
+    if (rowNum === -1) return { ok: false, error: '品目が見つかりません' };
+    const value = ['A', 'B', 'C'].indexOf(body.confidence) !== -1 ? body.confidence : '';
+    dSh.getRange(rowNum, D['受注確度'] + 1).setValue(value);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// body = { action:'undoMark', docNo, no, field:'受注日'|'失注日' }
+// 直前に記録した受注・失注を取り消す（該当セルを空欄に戻す）
+function undoMark(body) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dSh = ss.getSheetByName(SHEET_DETAIL);
+    const rowNum = findDetailRow_(dSh, body.docNo, body.no);
+    if (rowNum === -1) return { ok: false, error: '品目が見つかりません' };
+    if (D[body.field] === undefined) return { ok: false, error: '不正な項目です' };
+    dSh.getRange(rowNum, D[body.field] + 1).setValue('');
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ---------------- ダッシュボード用データ ----------------
@@ -700,8 +800,6 @@ function getDashboardData() {
         orderDate: fmtDate_(r[D['受注日']], tz),
         dueDate: fmtDate_(r[D['納期']], tz),
         lostDate: fmtDate_(r[D['失注日']], tz),
-        shipDate: fmtDate_(r[D['出荷日']], tz),
-        memo: r[D['備考']] || '',
         confidence: r[D['受注確度']] || ''
       });
     });
@@ -808,8 +906,6 @@ function createBackup(body) {
       row[BK['受注日']] = dr[D['受注日']];
       row[BK['納期']] = dr[D['納期']];
       row[BK['失注日']] = dr[D['失注日']];
-      row[BK['出荷日']] = dr[D['出荷日']];
-      row[BK['備考(明細)']] = dr[D['備考']];
       row[BK['受注確度']] = dr[D['受注確度']];
       return row;
     });
@@ -941,8 +1037,6 @@ function getBackupData(backupId) {
         orderDate: fmtDate_(r[BK['受注日']], tz),
         dueDate: fmtDate_(r[BK['納期']], tz),
         lostDate: fmtDate_(r[BK['失注日']], tz),
-        shipDate: fmtDate_(r[BK['出荷日']], tz),
-        memo: r[BK['備考(明細)']] || '',
         confidence: r[BK['受注確度']] || ''
       });
     });
@@ -1016,8 +1110,6 @@ function importBackup(body) {
       row[BK['受注日']] = parseDate_(d.orderDate) || d.orderDate || '';
       row[BK['納期']] = parseDate_(d.dueDate) || d.dueDate || '';
       row[BK['失注日']] = parseDate_(d.lostDate) || d.lostDate || '';
-      row[BK['出荷日']] = parseDate_(d.shipDate) || d.shipDate || '';
-      row[BK['備考(明細)']] = d.memo || '';
       row[BK['受注確度']] = d.confidence || '';
       return row;
     });
@@ -1119,8 +1211,6 @@ function restoreDetailRows(body) {
       row[D['受注日']] = parseDate_(bd.orderDate) || bd.orderDate;
       row[D['納期']] = parseDate_(bd.dueDate) || bd.dueDate;
       row[D['失注日']] = parseDate_(bd.lostDate) || bd.lostDate;
-      row[D['出荷日']] = parseDate_(bd.shipDate) || bd.shipDate;
-      row[D['備考']] = bd.memo;
       row[D['受注確度']] = bd.confidence;
       detailRowsToAdd.push(row);
       restoreLogRows.push([bd.docNo, bd.no, restoredAt, backupId]);

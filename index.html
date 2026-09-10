@@ -90,7 +90,7 @@
   .swimlane .arrow-cell .sub{color:var(--accent);}
 
   /* セットアップ手順 */
-  .setup-steps{padding-left:20px;margin:0;}
+  .setup-steps{padding-left:20px;margin:0;font-size:0.85rem;}
   .setup-steps > li{margin-bottom:16px;line-height:1.6;}
   .setup-steps ul{margin-top:6px;padding-left:18px;font-size:0.85rem;color:var(--muted);}
   .setup-steps ul li{margin-bottom:4px;}
@@ -174,7 +174,7 @@
   </div>
 
   <div class="card">
-    <h2>①ウェブアプリURLを取得する</h2>
+    <h2>①見積書データの保存先を用意する</h2>
     <p class="note">見積書の集計先となる、Googleスプレッドシート＋GASスクリプトを準備します（社内で最初に1人が行えばOKです）。</p>
     <ol class="setup-steps">
       <li>新しいGoogleスプレッドシートを作成する</li>
@@ -264,7 +264,7 @@ const CONFIG_DEFAULTS = [
   [&#x27;フリー項目印字有無&#x27;, &#x27;印字する&#x27;, &#x27;「印字する」または「印字しない」。社内管理用に記録だけして客先向け書類には出さない場合は「印字しない」&#x27;],
   [&#x27;書類番号prefix&#x27;, &#x27;Q&#x27;, &#x27;例：Q-202609-001 のように使われます（見積・発注で別々に設定）&#x27;],
   [&#x27;デフォルト税率(%)&#x27;, &#x27;10&#x27;, &#x27;明細行の税率欄に入る初期値（行ごとに上書き可）&#x27;],
-  [&#x27;決算月&#x27;, &#x27;4&#x27;, &#x27;事業年度の開始月（1〜12）。ダッシュボードの「今期累計」集計に使用&#x27;],
+  [&#x27;事業年度開始月&#x27;, &#x27;4&#x27;, &#x27;事業年度の開始月（1〜12）。ダッシュボードの「今期累計」集計に使用&#x27;],
   [&#x27;消費税端数処理&#x27;, &#x27;四捨五入&#x27;, &#x27;「切り捨て」「切り上げ」「四捨五入」のいずれか。税率ごとの小計に対して1回だけ適用します&#x27;],
   [&#x27;有効期限デフォルト方式&#x27;, &#x27;自由入力&#x27;, &#x27;「自動計算」または「自由入力」。自動計算＝発行日から下の日数を足した日付を自動入力／自由入力＝未入力のまま開始（手動で日付を選んでもらう）&#x27;],
   [&#x27;有効期限デフォルト日数&#x27;, &#x27;30&#x27;, &#x27;有効期限デフォルト方式が「自動計算」のときに使う日数（発行日からの日数）&#x27;],
@@ -390,7 +390,7 @@ function applyConfigValidation_(sh) {
     &#x27;フリー項目印字有無&#x27;: [&#x27;印字する&#x27;, &#x27;印字しない&#x27;],
     &#x27;消費税端数処理&#x27;: [&#x27;切り捨て&#x27;, &#x27;切り上げ&#x27;, &#x27;四捨五入&#x27;],
     &#x27;有効期限デフォルト方式&#x27;: [&#x27;自動計算&#x27;, &#x27;自由入力&#x27;],
-    &#x27;決算月&#x27;: [&#x27;1&#x27;, &#x27;2&#x27;, &#x27;3&#x27;, &#x27;4&#x27;, &#x27;5&#x27;, &#x27;6&#x27;, &#x27;7&#x27;, &#x27;8&#x27;, &#x27;9&#x27;, &#x27;10&#x27;, &#x27;11&#x27;, &#x27;12&#x27;]
+    &#x27;事業年度開始月&#x27;: [&#x27;1&#x27;, &#x27;2&#x27;, &#x27;3&#x27;, &#x27;4&#x27;, &#x27;5&#x27;, &#x27;6&#x27;, &#x27;7&#x27;, &#x27;8&#x27;, &#x27;9&#x27;, &#x27;10&#x27;, &#x27;11&#x27;, &#x27;12&#x27;]
   };
   Object.keys(CONFIG_CHOICES).forEach(function (key) {
     const rowNum = findConfigRow_(sh, key);
@@ -595,7 +595,7 @@ function getConfig_() {
     freePrint: s(&#x27;フリー項目印字有無&#x27;, &#x27;印字する&#x27;),
     prefix: s(&#x27;書類番号prefix&#x27;, &#x27;Q&#x27;),
     taxDefault: Number(s(&#x27;デフォルト税率(%)&#x27;, &#x27;10&#x27;)) || 10,
-    fiscalMonth: Number(s(&#x27;決算月&#x27;, &#x27;4&#x27;)) || 4,
+    fiscalMonth: Number(s(&#x27;事業年度開始月&#x27;, &#x27;4&#x27;)) || 4,
     roundMode: s(&#x27;消費税端数処理&#x27;, &#x27;四捨五入&#x27;),
     expiryMode: s(&#x27;有効期限デフォルト方式&#x27;, &#x27;自由入力&#x27;),
     expiryDays: Number(s(&#x27;有効期限デフォルト日数&#x27;, &#x27;30&#x27;)) || 0,
@@ -1390,7 +1390,7 @@ function deleteQuotation(body) {
         初回のみ権限の承認を求められるので許可する
         <p class="note">「このアプリは Google で確認されていません」と出た場合は「詳細」→「安全ではないページに移動」で進めて問題ありません。これはGoogle公式の審査を受けていない個人のスクリプトを実行する際に必ず表示される、Google側の定型的な確認です。コードの中身は上記で全文確認できます。「エラー 401: invalid_client」が表示された場合は、そのエラー画面を閉じてから、もう一度「アクセスを承認」を押し直すと解消することがあります。</p>
       </li>
-      <li>スプレッドシートを開き直す（開いたままの場合はブラウザをリロードする）と、メニューに「案件管理ツール（見積）」が追加され、「設定」「登録リスト」「見積ヘッダー」「見積明細」の4タブが自動的に作られます（このうち入力が必要なのは「設定」「登録リスト」の2つだけです）。「設定」タブに自社名を入力する（必須）。「登録リスト」タブに部署名候補・担当者一覧を入力しておくと作成フォームで選択できます</li>
+      <li>スプレッドシートを開き直す（開いたままの場合はブラウザをリロードする）と、メニューに「案件管理ツール（見積）」が追加され、「設定」「登録リスト」「見積ヘッダー」「見積明細」「バックアップ履歴」「バックアップ一覧」「削除ログ」「復元ログ」の8タブが自動的に作られます（このうち入力が必要なのは「設定」「登録リスト」の2つだけです。残りは自動で使われるデータタブです）。「設定」タブに自社名を入力する（必須）。「登録リスト」タブに部署名候補・担当者一覧を入力しておくと作成フォームで選択できます</li>
     </ol>
   </div>
 
@@ -1398,6 +1398,7 @@ function deleteQuotation(body) {
     <h2>②接続を確認する</h2>
     <p class="note">手順④でデプロイが完了すると、「ウェブアプリ」というラベルの付いたURLが表示された画面が出ます。その右側にあるコピーアイコンをクリックしてURLをコピーし、下の欄に貼り付けてください。</p>
     <p class="note">その画面を閉じてしまった場合は、スプレッドシートのメニュー「拡張機能」→「Apps Script」を開き直し→右上の「デプロイ」→「デプロイを管理」を開くと、同じURLをもう一度確認できます。</p>
+    <p class="note">URLを下の欄に貼り付けたら、「接続テスト」ボタンを押してください。</p>
     <label class="field-label">ウェブアプリURL</label>
     <input type="url" id="input-gas-url" placeholder="https://script.google.com/macros/s/xxxx/exec">
     <p class="step-note" id="connect-status"></p>
@@ -1415,7 +1416,7 @@ function deleteQuotation(body) {
   </div>
   <div class="choice-card" onclick="openDashboard()">
     <div class="emoji">📊</div>
-    <div class="txt"><b>一覧・ダッシュボード</b><span>提出状況・受注状況・要注意案件を確認。書類番号から再印刷・複製も可能</span></div>
+    <div class="txt"><b>一覧・ダッシュボード</b><span>提出状況・決着状況・未決状況・要注意一覧を確認。書類番号から再印刷・複製も可能</span></div>
   </div>
   <div class="choice-card" onclick="showScreen('screen-connect')">
     <div class="emoji">⚙️</div>
@@ -1426,7 +1427,7 @@ function deleteQuotation(body) {
 <!-- ============ 作成フォーム ============ -->
 <div class="screen wrap" id="screen-create">
   <h1>🆕 新規見積書の作成</h1>
-  <p class="note">送信すると、書類番号が自動で採番され、内容がスプレッドシート「見積ヘッダー」「見積明細」に自動で追記されます。書類番号は送信時に確定するため、それまでは表示されません。</p>
+  <p class="note">「この内容で見積書を作成する」を押すと、書類番号が自動で採番され、内容がスプレッドシート「見積ヘッダー」「見積明細」に自動で追記されます。書類番号は送信時に確定するため、それまでは表示されません。</p>
 
   <div class="card">
     <h2>宛先・条件</h2>
@@ -1505,7 +1506,7 @@ function deleteQuotation(body) {
   <div class="card">
     <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;">
       <input type="checkbox" id="f-track" checked style="width:auto;margin:0;">
-      進捗管理の対象にする（チェックを外すと量産品などとして一覧・KPI・アラート集計から除外されます）
+      進捗管理の対象にする（チェックを外すと量産品などとして概要・要注意一覧・全品目一覧の集計から除外されます）
     </label>
   </div>
 
@@ -2368,6 +2369,10 @@ function importBackupFile(inputEl){
   };
   reader.readAsText(file);
 }
+// 比較対象を選ぶたびに、バックアップの中身と同時に「現在のデータ」も取り直す。
+// dashはダッシュボードを開いた／更新した時点のキャッシュのため、そのままでは
+// 実際のスプレッドシートと食い違っている可能性がある（他の人が別途編集した等）。
+// 差分表示は常に最新の状態と比較したいため、ここで必ず再取得する。
 async function onDiffBackupChange(){
   const backupId = document.getElementById('diff-backup-select').value;
   diffState.backupId = backupId;
@@ -2376,9 +2381,17 @@ async function onDiffBackupChange(){
   if(!backupId){ resultEl.innerHTML=''; return; }
   resultEl.innerHTML = '<p class="note">読み込み中...</p>';
   try{
-    const res = await gasGet({ action:'getBackupData', backupId: backupId });
-    if(!res.ok){ toast('取得に失敗しました：' + (res.error||''), true); return; }
-    diffState.backupData = res;
+    const [backupRes, dashRes] = await Promise.all([
+      gasGet({ action:'getBackupData', backupId: backupId }),
+      gasGet({ action:'getDashboardData' })
+    ]);
+    if(!backupRes.ok){ toast('取得に失敗しました：' + (backupRes.error||''), true); return; }
+    diffState.backupData = backupRes;
+    if(dashRes.ok){
+      dash = dashRes;
+    } else {
+      toast('現在のデータの更新に失敗しました。表示内容が古い可能性があります。', true);
+    }
     renderDiffResult();
   }catch(err){
     toast('通信エラーが発生しました。', true);

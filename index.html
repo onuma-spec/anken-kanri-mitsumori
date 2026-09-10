@@ -61,7 +61,8 @@
   .badge.danger{background:var(--danger-bg);color:var(--danger);}
   .badge.muted{background:var(--border);color:var(--muted);}
   .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-  @media (max-width:760px){ .kpi-grid{grid-template-columns:1fr;} }
+  .kpi-grid.cols-4{grid-template-columns:repeat(4,1fr);}
+  @media (max-width:760px){ .kpi-grid{grid-template-columns:1fr;} .kpi-grid.cols-4{grid-template-columns:1fr;} }
   .kpi-box{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;}
   .kpi-box .num{font-size:1.5rem;font-weight:700;}
   .kpi-box .label{font-size:0.8rem;color:var(--muted);}
@@ -149,8 +150,8 @@
 
         <div class="cell step">①見積書作成</div>
         <div class="cell tool">フォーム入力</div>
-        <div class="cell arrow-cell">→<span class="sub">自動で記録</span></div>
-        <div class="cell tool">見積書の内容</div>
+        <div class="cell arrow-cell">→<span class="sub">自動作成</span></div>
+        <div class="cell tool">見積書一覧</div>
 
         <div class="cell step">②見積書提出</div>
         <div class="cell tool">書類の生成<span class="sub">印刷・PDF化まで</span></div>
@@ -2038,22 +2039,37 @@ function buildSubmissionTable(headers, details, fiscalMonth){
     return { label: mo.y+'年'+mo.m+'月', count: Object.keys(b.docSet).length, amount: b.amount };
   });
 }
+// 「件数」は明細（品目）単位でのカウントになり、1見積書に複数品目がある場合
+// 「何件受注したか」という直感とズレるため、金額ベースのみを採用する
 function buildDecisionKPI(headers, details, fiscalMonth){
   const hMap = buildHMap(headers);
   const range = fiscalYearRange(fiscalMonth);
-  let wonCount=0, wonAmt=0, lostCount=0, lostAmt=0;
+  let wonAmt=0, lostAmt=0;
   details.forEach(function(d){
     const h = hMap[d.docNo];
     if(!h || !h.trackProgress) return;
     if(d.lostDate){
-      if(d.lostDate>=range.start && d.lostDate<=range.end){ lostCount++; lostAmt += d.amount; }
+      if(d.lostDate>=range.start && d.lostDate<=range.end){ lostAmt += d.amount; }
     } else if(d.orderDate){
-      if(d.orderDate>=range.start && d.orderDate<=range.end){ wonCount++; wonAmt += d.amount; }
+      if(d.orderDate>=range.start && d.orderDate<=range.end){ wonAmt += d.amount; }
     }
   });
-  const rateByCount = (wonCount+lostCount)>0 ? (wonCount/(wonCount+lostCount)*100) : null;
-  const rateByAmt = (wonAmt+lostAmt)>0 ? (wonAmt/(wonAmt+lostAmt)*100) : null;
-  return { wonCount:wonCount, wonAmt:wonAmt, lostCount:lostCount, lostAmt:lostAmt, rateByCount:rateByCount, rateByAmt:rateByAmt };
+  const rate = (wonAmt+lostAmt)>0 ? (wonAmt/(wonAmt+lostAmt)*100) : null;
+  return { wonAmt:wonAmt, lostAmt:lostAmt, rate:rate };
+}
+// 未決（受注日・失注日どちらも未入力）の品目を、受注確度（A/B/C/未設定）ごとに
+// 金額集計する。決着日で絞り込む②とは異なり、期間を区切らない現在のスナップショット。
+function buildPendingByConfidence(headers, details){
+  const hMap = buildHMap(headers);
+  const buckets = { A:0, B:0, C:0, '':0 };
+  details.forEach(function(d){
+    const h = hMap[d.docNo];
+    if(!h || !h.trackProgress) return;
+    if(statusOf(d) !== '注文待ち') return;
+    const key = (d.confidence==='A'||d.confidence==='B'||d.confidence==='C') ? d.confidence : '';
+    buckets[key] += d.amount;
+  });
+  return buckets;
 }
 function buildRows(headers, details){
   const hMap = buildHMap(headers);
@@ -2085,9 +2101,12 @@ function renderDashboard(){
   const cfg = dash.config;
   const headers = dash.headers, details = dash.details;
   const alerts = buildAlerts(headers, details);
-  const expiryAlertCount = alerts.filter(function(a){ return a.kind==='有効期限超過'; }).length;
   const months = buildSubmissionTable(headers, details, cfg.fiscalMonth);
+  const monthTotalCount = months.reduce(function(s,mo){ return s+mo.count; }, 0);
+  const monthTotalAmount = months.reduce(function(s,mo){ return s+mo.amount; }, 0);
   const decision = buildDecisionKPI(headers, details, cfg.fiscalMonth);
+  const pending = buildPendingByConfidence(headers, details);
+  const pendingTotal = pending.A + pending.B + pending.C + pending[''];
   const staffNames = Array.from(new Set(headers.map(function(h){ return h.staff; }).filter(Boolean))).sort();
 
   // タブナビ
@@ -2103,18 +2122,25 @@ function renderDashboard(){
   html += '<div class="card"><h2>① 提出状況（発行日ベース・今期12ヶ月）</h2>';
   html += '<div class="tbl-scroll" style="max-height:none;"><table class="data-tbl month-tbl"><thead><tr><th>月</th><th>提出件数</th><th>見積合計額</th></tr></thead><tbody>';
   months.forEach(function(mo){ html += '<tr><td>'+mo.label+'</td><td>'+mo.count+'件</td><td>'+formatYen(mo.amount)+'</td></tr>'; });
+  html += '<tr style="font-weight:700;border-top:2px solid var(--border);"><td>合計</td><td>'+monthTotalCount+'件</td><td>'+formatYen(monthTotalAmount)+'</td></tr>';
   html += '</tbody></table></div></div>';
 
   html += '<div class="card"><h2>② 決着状況（今期累計）</h2>';
   html += '<div class="kpi-grid">';
-  html += '<div class="kpi-box"><div class="num">'+decision.wonCount+'件</div><div class="label">受注（'+formatYen(decision.wonAmt)+'）</div></div>';
-  html += '<div class="kpi-box"><div class="num">'+decision.lostCount+'件</div><div class="label">失注（'+formatYen(decision.lostAmt)+'）</div></div>';
-  html += '<div class="kpi-box"><div class="num">'+(decision.rateByCount!==null?decision.rateByCount.toFixed(1)+'%':'―')+'</div><div class="label">受注率（件数ベース） / 金額ベース：'+(decision.rateByAmt!==null?decision.rateByAmt.toFixed(1)+'%':'―')+'</div></div>';
+  html += '<div class="kpi-box"><div class="num">'+formatYen(decision.wonAmt)+'</div><div class="label">受注</div></div>';
+  html += '<div class="kpi-box"><div class="num">'+formatYen(decision.lostAmt)+'</div><div class="label">失注</div></div>';
+  html += '<div class="kpi-box"><div class="num">'+(decision.rate!==null?decision.rate.toFixed(1)+'%':'―')+'</div><div class="label">受注率</div></div>';
   html += '</div>';
   html += '</div>';
 
-  html += '<div class="card"><h2>③ 要注意</h2>';
-  html += '<div class="kpi-box" style="max-width:260px;"><div class="num">'+expiryAlertCount+'件</div><div class="label">有効期限超過（未決のまま）</div></div>';
+  html += '<div class="card"><h2>③ 未決状況（受注確度別）</h2>';
+  html += '<div class="kpi-grid cols-4">';
+  html += '<div class="kpi-box"><div class="num">'+formatYen(pending.A)+'</div><div class="label">受注確度A</div></div>';
+  html += '<div class="kpi-box"><div class="num">'+formatYen(pending.B)+'</div><div class="label">受注確度B</div></div>';
+  html += '<div class="kpi-box"><div class="num">'+formatYen(pending.C)+'</div><div class="label">受注確度C</div></div>';
+  html += '<div class="kpi-box"><div class="num">'+formatYen(pending[''])+'</div><div class="label">未設定</div></div>';
+  html += '</div>';
+  html += '<div class="kpi-box" style="margin-top:10px;"><div class="num">'+formatYen(pendingTotal)+'</div><div class="label">合計</div></div>';
   html += '</div>';
   html += '</div>';
 

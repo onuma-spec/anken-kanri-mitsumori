@@ -2111,7 +2111,7 @@ function renderDashboard(){
 
   // タブナビ
   let html = '<div class="dash-tabs no-print">'
-    + '<button class="dash-tab-btn active" data-tab="kpi" onclick="switchDashTab(\'kpi\')">📊 概要（①②③）</button>'
+    + '<button class="dash-tab-btn active" data-tab="kpi" onclick="switchDashTab(\'kpi\')">📊 概要</button>'
     + '<button class="dash-tab-btn" data-tab="alerts" onclick="switchDashTab(\'alerts\')">⚠️ 要注意一覧（'+alerts.length+'）</button>'
     + '<button class="dash-tab-btn" data-tab="list" onclick="switchDashTab(\'list\')">📋 全品目一覧</button>'
     + '<button class="dash-tab-btn" data-tab="diff" onclick="switchDashTab(\'diff\')">🔍 差分表示</button>'
@@ -2147,6 +2147,7 @@ function renderDashboard(){
   // ---- パネル2：要注意一覧 ----
   html += '<div class="dash-panel" data-panel="alerts">';
   html += '<div class="card"><h2>要注意一覧</h2>';
+  html += '<p class="note">次のいずれかに該当する品目を表示しています。<br>・<b>有効期限超過</b>：見積書の有効期限を過ぎても、まだ受注・失注のどちらも決まっていない（注文待ちのまま）<br>・<b>納期超過</b>：明細の納期を過ぎても、まだ出荷されていない（受注のまま）</p>';
   if(alerts.length===0){
     html += '<p class="note">該当する品目はありません。</p>';
   } else {

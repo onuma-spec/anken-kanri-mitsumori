@@ -183,8 +183,8 @@
   </div>
 
   <div class="card">
-    <h2>①見積書データの保存先を用意する</h2>
-    <p class="note">Googleスプレッドシートを、htmlツールとやり取りできるデータ保存先にする作業です（社内で最初に1人が行えばOKです）。</p>
+    <h2>①見積書データの保存先を用意する（社内で最初の1人が行う）</h2>
+    <p class="note">Googleスプレッドシートを、htmlツールとやり取りできるデータ保存先にする作業です。</p>
     <ol class="setup-steps">
       <li>新しいGoogleスプレッドシートを作成する</li>
       <li>メニュー「拡張機能」→「Apps Script」を開く</li>
@@ -1494,14 +1494,13 @@ function deleteQuotation(body) {
   </div>
 
   <div class="card">
-    <h2>②接続を確認する</h2>
-    <p class="note">手順④でデプロイが完了すると、「ウェブアプリ」というラベルの付いたURLが表示された画面が出ます。その右側にあるコピーアイコンをクリックしてURLをコピーし、下の欄に貼り付けてください。</p>
-    <p class="note">その画面を閉じてしまった場合は、スプレッドシートのメニュー「拡張機能」→「Apps Script」を開き直し→右上の「デプロイ」→「デプロイを管理」を開くと、同じURLをもう一度確認できます。</p>
-    <p class="note">URLを下の欄に貼り付けたら、「接続テスト」ボタンを押してください。</p>
+    <h2>②接続を確認する（利用者それぞれが最初に1回行う）</h2>
+    <p class="note">見積書ツールを使う人が、それぞれ自分のブラウザで一度だけ行う作業です。一度つなげば、次回からは自動で接続されます。</p>
+    <p class="note">スプレッドシートのメニュー「拡張機能」→「Apps Script」→右上の「デプロイ」→「デプロイを管理」からウェブアプリURLをコピーして下の欄に貼り付け、「接続」ボタンを押してください。</p>
     <label class="field-label">ウェブアプリURL</label>
     <input type="url" id="input-gas-url" placeholder="https://script.google.com/macros/s/xxxx/exec">
     <p class="step-note" id="connect-status"></p>
-    <button class="btn" onclick="testConnection()">接続テスト</button>
+    <button class="btn" onclick="testConnection()">接続</button>
   </div>
 </div>
 

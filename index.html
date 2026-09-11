@@ -88,6 +88,9 @@
   /* 全体像（3レーン図） */
   .swimlane{display:grid;grid-template-columns:1.1fr 1fr 0.5fr 1fr;gap:8px 6px;margin-top:10px;min-width:560px;}
   .swimlane .lane-head{font-size:0.72rem;font-weight:700;color:var(--muted);text-align:center;padding-bottom:6px;border-bottom:2px solid var(--border);}
+  .swimlane .lane-head.lh-flow{color:var(--muted);border-bottom-color:var(--muted);}
+  .swimlane .lane-head.lh-html{color:var(--accent);border-bottom-color:var(--accent);}
+  .swimlane .lane-head.lh-sheet{color:var(--ok);border-bottom-color:var(--ok);}
   .swimlane .cell{border-radius:8px;padding:8px 10px;font-size:0.78rem;text-align:center;border:1.5px solid var(--border);background:var(--bg);display:flex;flex-direction:column;justify-content:center;}
   .swimlane .cell.tool{border-color:var(--accent);background:var(--ok-bg);font-weight:600;}
   .swimlane .cell.empty{border-style:dashed;color:var(--muted);background:transparent;font-weight:400;}
@@ -155,9 +158,9 @@
     <p class="note">見積書に関する一連の業務を上から時系列に並べ、どこをこのツール（htmlツール／Googleスプレッドシート）が担うかを示しています。点線の空箱は、実際の業務行為そのもの（ツールの外）であることを示します。</p>
     <div class="tbl-scroll" style="max-height:none;">
       <div class="swimlane">
-        <div class="lane-head">業務内容</div>
-        <div class="lane-head">htmlツール</div>
-        <div class="lane-head" style="grid-column:span 2;">Googleスプレッドシート</div>
+        <div class="lane-head lh-flow">業務内容</div>
+        <div class="lane-head lh-html">htmlツール</div>
+        <div class="lane-head lh-sheet" style="grid-column:span 2;">Googleスプレッドシート</div>
 
         <div class="cell step">①見積書作成</div>
         <div class="cell tool">フォーム入力</div>

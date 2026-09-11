@@ -2016,6 +2016,7 @@ function renderPrintScreen(record){
       + '<td class="num">'+it.qty+'</td>'
       + '<td class="num">'+formatYen(it.unitPrice)+'</td>'
       + '<td class="num">'+it.taxRate+'%</td>'
+      + '<td class="num">'+escapeHtml(it.dueDate||'')+'</td>'
       + '<td class="num">'+formatYen(it.amount)+'</td>'
       + '</tr>';
   }).join('');
@@ -2046,7 +2047,7 @@ function renderPrintScreen(record){
     +     (record.contact ? '<div class="val">'+escapeHtml(record.contact)+'</div>' : '')
     +   '</div>'
     + '</div>'
-    + '<table class="doc-items"><thead><tr><th>品番</th><th>品名</th><th>数量</th><th>単価</th><th>税率</th><th>金額</th></tr></thead><tbody>'+itemsHtml+'</tbody></table>'
+    + '<table class="doc-items"><thead><tr><th>品番</th><th>品名</th><th>数量</th><th>単価</th><th>税率</th><th>納期</th><th>金額</th></tr></thead><tbody>'+itemsHtml+'</tbody></table>'
     + '<div class="doc-total-box">'+totalHtml+'</div>'
     + '<div class="doc-cond">'
     +   (record.expiry ? '<div class="line"><b>有効期限</b><span>'+escapeHtml(record.expiry)+'</span></div>' : '')

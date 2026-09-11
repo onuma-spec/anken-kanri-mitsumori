@@ -1651,6 +1651,11 @@ function deleteQuotation(body) {
 
 <script>
 // ================== 状態 ==================
+// note記事等で共有するデモ環境のウェブアプリURL。未設定（空文字）の間は
+// ?demo=1 を付けてアクセスしても何も起きない（通常の接続画面が表示される）
+const DEMO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzzZmE9WxAzzVlDfkGBmv3KzkWEnEZvCA0i8tZHp3897ufbc7U-UyZYRZuoNQXzMwwCMg/exec';
+function isDemoMode(){ return !!DEMO_GAS_URL && state.gasUrl === DEMO_GAS_URL; }
+
 let state = { gasUrl:'', config:null, depts:[], staff:[], clients:[], freeValues:[], backups:[] };
 let form = { items: [] };
 let dash = null; // { config, headers, details, deleteLog }
@@ -1764,6 +1769,12 @@ function statusBadge(status){
 // ================== 起動 ==================
 window.addEventListener('DOMContentLoaded', init);
 async function init(){
+  const params = new URLSearchParams(window.location.search);
+  if(params.get('demo') === '1' && DEMO_GAS_URL){
+    document.getElementById('input-gas-url').value = DEMO_GAS_URL;
+    await testConnection();
+    return;
+  }
   const saved = localStorage.getItem('mitsumori_gas_url');
   if(saved){
     document.getElementById('input-gas-url').value = saved;
@@ -1814,10 +1825,34 @@ async function loadInitData(silent){
 }
 function renderHomeInfo(){
   const c = state.config;
+  let html = '';
+  if(isDemoMode()){
+    html += '<div class="warn-banner">⚠️ これはデモ環境です。入力内容は毎日自動でリセットされるほか、下のボタンでいつでも手動リセットもできます。実際の取引先名・個人情報等は入力しないでください。</div>';
+    html += '<button class="btn secondary small" id="demo-reset-btn" style="display:block;margin-bottom:10px;" onclick="manualResetDemo()">🔁 デモデータをリセット</button>';
+  }
   if(!c.companyName){
-    document.getElementById('home-info').innerHTML = '⚠️ スプレッドシートの「設定」タブに自社名が未入力です。見積書作成前に入力してください。';
+    html += '⚠️ スプレッドシートの「設定」タブに自社名が未入力です。見積書作成前に入力してください。';
   } else {
-    document.getElementById('home-info').textContent = '接続先：' + c.companyName;
+    html += '接続先：' + escapeHtml(c.companyName);
+  }
+  document.getElementById('home-info').innerHTML = html;
+}
+async function manualResetDemo(){
+  if(!isDemoMode()) return;
+  const btn = document.getElementById('demo-reset-btn');
+  btn.disabled = true; btn.textContent = 'リセット中...';
+  try{
+    const res = await gasGet({ action:'resetDemo' });
+    if(res.ok){
+      toast('デモデータをリセットしました');
+      await loadInitData(true); // renderHomeInfo()経由でボタンも再生成される
+    } else {
+      toast('リセットに失敗しました：' + (res.error||''), true);
+      btn.disabled = false; btn.textContent = '🔁 デモデータをリセット';
+    }
+  }catch(err){
+    toast('通信エラーが発生しました。', true);
+    btn.disabled = false; btn.textContent = '🔁 デモデータをリセット';
   }
 }
 
